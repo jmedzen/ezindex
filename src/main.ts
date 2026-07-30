@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, Notice, TFolder, TFile, FuzzySuggestModal, normalizePath } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, Notice, TFolder, TFile, FuzzySuggestModal, Modal, normalizePath } from 'obsidian';
 
 interface EzIndexSettings {
 	indexHeader: string;
@@ -26,15 +26,24 @@ export default class EzIndexPlugin extends Plugin {
 
 		console.log('Loading EzIndex plugin');
 
-		// Ribbon icon: Open folder selection modal
-		this.addRibbonIcon('list-ordered', 'Generate EzIndex for a Folder', () => {
-			new FolderSuggestModal(this.app, this).open();
+		// Ribbon icon: Open Generator Modal with execute button
+		this.addRibbonIcon('list-ordered', 'EzIndex Directory Generator', () => {
+			new EzIndexGeneratorModal(this.app, this).open();
 		});
 
-		// Command 1: Generate index for current active file's folder
+		// Command 1: Open Generator Modal to select folder & generate
+		this.addCommand({
+			id: 'open-ezindex-generator-modal',
+			name: 'Open Index Generator Modal...',
+			callback: () => {
+				new EzIndexGeneratorModal(this.app, this).open();
+			}
+		});
+
+		// Command 2: Quick generate index for active file's folder
 		this.addCommand({
 			id: 'generate-active-folder-index',
-			name: 'Generate Index for Current Active Folder',
+			name: 'Quick Generate Index for Current Folder',
 			callback: () => {
 				const activeFile = this.app.workspace.getActiveFile();
 				if (!activeFile) {
@@ -50,15 +59,6 @@ export default class EzIndexPlugin extends Plugin {
 			}
 		});
 
-		// Command 2: Open folder suggestion modal to select any folder
-		this.addCommand({
-			id: 'select-folder-generate-index',
-			name: 'Select Folder to Generate Index...',
-			callback: () => {
-				new FolderSuggestModal(this.app, this).open();
-			}
-		});
-
 		// Add right-click context menu on folders in File Explorer
 		this.registerEvent(
 			this.app.workspace.on('folder-menu', (menu, folder) => {
@@ -68,7 +68,7 @@ export default class EzIndexPlugin extends Plugin {
 							.setTitle('EzIndex: Generate Index for this folder')
 							.setIcon('list-ordered')
 							.onClick(() => {
-								this.generateIndexForFolder(folder);
+								new EzIndexGeneratorModal(this.app, this, folder).open();
 							});
 					});
 				}
@@ -91,11 +91,14 @@ export default class EzIndexPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	async generateIndexForFolder(targetFolder: TFolder) {
+	async generateIndexForFolder(targetFolder: TFolder, overrideFilename?: string) {
 		const folderName = targetFolder.path === '/' || !targetFolder.name ? 'Vault' : targetFolder.name;
 		
 		// Determine index filename (replacing {{folderName}} placeholder)
-		let filename = this.settings.indexFilename.trim() || '_Index.md';
+		let filename = (overrideFilename !== undefined && overrideFilename.trim() !== '') 
+			? overrideFilename.trim() 
+			: (this.settings.indexFilename.trim() || '_Index.md');
+
 		filename = filename.replace(/\{\{folderName\}\}/g, folderName);
 		if (!filename.endsWith('.md')) {
 			filename += '.md';
@@ -162,32 +165,80 @@ export default class EzIndexPlugin extends Plugin {
 	}
 }
 
-class FolderSuggestModal extends FuzzySuggestModal<TFolder> {
+class EzIndexGeneratorModal extends Modal {
 	plugin: EzIndexPlugin;
+	selectedFolder: TFolder | null = null;
+	customFilename: string = '';
 
-	constructor(app: App, plugin: EzIndexPlugin) {
+	constructor(app: App, plugin: EzIndexPlugin, initialFolder?: TFolder) {
 		super(app);
 		this.plugin = plugin;
-		this.setPlaceholder('Type to search for a folder...');
+		const activeFile = this.app.workspace.getActiveFile();
+		this.selectedFolder = initialFolder || activeFile?.parent || this.app.vault.getRoot();
+		this.customFilename = this.plugin.settings.indexFilename;
 	}
 
-	getItems(): TFolder[] {
-		const files = this.app.vault.getAllLoadedFiles();
-		const folders: TFolder[] = [];
-		for (const file of files) {
-			if (file instanceof TFolder) {
-				folders.push(file);
-			}
-		}
-		return folders;
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.addClass('ezindex-modal');
+
+		contentEl.createEl('h2', { text: 'EzIndex - 建立目錄索引' });
+
+		// Folder selection dropdown
+		const allFolders = this.app.vault.getAllLoadedFiles().filter((f): f is TFolder => f instanceof TFolder);
+		allFolders.sort((a, b) => a.path.localeCompare(b.path));
+
+		new Setting(contentEl)
+			.setName('目標目錄 (Target Directory)')
+			.setDesc('請選擇要建立索引的目錄')
+			.addDropdown(dropdown => {
+				for (const folder of allFolders) {
+					const displayPath = folder.path === '/' ? '/ (Vault 根目錄)' : folder.path;
+					dropdown.addOption(folder.path, displayPath);
+				}
+				if (this.selectedFolder) {
+					dropdown.setValue(this.selectedFolder.path);
+				}
+				dropdown.onChange((value) => {
+					const folder = this.app.vault.getAbstractFileByPath(value);
+					if (folder instanceof TFolder) {
+						this.selectedFolder = folder;
+					}
+				});
+			});
+
+		// Custom index filename field inside modal
+		new Setting(contentEl)
+			.setName('索引檔名 (Index Filename)')
+			.setDesc('支援 {{folderName}} 動態資料夾名稱替代變數')
+			.addText(text => {
+				text.setValue(this.customFilename);
+				text.onChange((val) => {
+					this.customFilename = val;
+				});
+			});
+
+		// Execute action button at the bottom
+		new Setting(contentEl)
+			.addButton(button => {
+				button
+					.setButtonText('🚀 執行建立索引 (Generate Index)')
+					.setCta()
+					.onClick(async () => {
+						if (!this.selectedFolder) {
+							new Notice('請先選擇一個目錄！');
+							return;
+						}
+						await this.plugin.generateIndexForFolder(this.selectedFolder, this.customFilename);
+						this.close();
+					});
+			});
 	}
 
-	getItemText(folder: TFolder): string {
-		return folder.path === '/' ? '/ (Vault Root)' : folder.path;
-	}
-
-	onChooseItem(folder: TFolder, evt: MouseEvent | KeyboardEvent): void {
-		this.plugin.generateIndexForFolder(folder);
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
 	}
 }
 
@@ -218,7 +269,7 @@ class EzIndexSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Index Filename Pattern')
-			.setDesc('Name of the generated index note. Use {{folderName}} to dynamically insert the folder name.')
+			.setDesc('Default name of generated index notes. Use {{folderName}} to dynamically insert the folder name.')
 			.addText(text => text
 				.setPlaceholder('_Index.md')
 				.setValue(this.plugin.settings.indexFilename)
@@ -239,7 +290,7 @@ class EzIndexSettingTab extends PluginSettingTab {
 					.onChange(async (value: 'inFolder' | 'vaultRoot' | 'customFolder') => {
 						this.plugin.settings.indexLocation = value;
 						await this.plugin.saveSettings();
-						this.display(); // Refresh settings to show/hide custom path input
+						this.display();
 					});
 			});
 
