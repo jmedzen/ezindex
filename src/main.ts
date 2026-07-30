@@ -7,6 +7,7 @@ interface EzIndexSettings {
 	indexLocation: 'inFolder' | 'vaultRoot' | 'customFolder';
 	customFolderPath: string;
 	overwriteExisting: boolean;
+	excludeList: string;
 }
 
 const DEFAULT_SETTINGS: EzIndexSettings = {
@@ -16,6 +17,7 @@ const DEFAULT_SETTINGS: EzIndexSettings = {
 	indexLocation: 'inFolder',
 	customFolderPath: '',
 	overwriteExisting: true,
+	excludeList: '',
 };
 
 export default class EzIndexPlugin extends Plugin {
@@ -121,10 +123,16 @@ export default class EzIndexPlugin extends Plugin {
 
 		const targetFilePath = normalizePath(targetDirPath ? `${targetDirPath}/${filename}` : filename);
 
+		// Prepare parsed exclude list items
+		const excludeItems = this.settings.excludeList
+			.split(',')
+			.map(item => item.trim())
+			.filter(item => item.length > 0);
+
 		// Build recursive markdown content
 		let content = `${this.settings.indexHeader}\n\n`;
 
-		const { text: treeContent, totalFiles } = this.renderFolderTree(targetFolder, targetFilePath, 1);
+		const { text: treeContent, totalFiles } = this.renderFolderTree(targetFolder, targetFilePath, 1, excludeItems);
 		content += treeContent;
 
 		// Create or update the index note file
@@ -142,11 +150,37 @@ export default class EzIndexPlugin extends Plugin {
 		}
 	}
 
-	private renderFolderTree(folder: TFolder, targetFilePath: string, currentDepth: number): { text: string; totalFiles: number } {
+	private isExcluded(fileName: string, excludeItems: string[]): boolean {
+		if (excludeItems.length === 0) return false;
+		const lowerName = fileName.toLowerCase();
+		const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '').toLowerCase();
+
+		for (const rawItem of excludeItems) {
+			const item = rawItem.toLowerCase();
+			if (!item) continue;
+			
+			// Exact name or name without extension match
+			if (lowerName === item || nameWithoutExt === item) {
+				return true;
+			}
+
+			// Extension match (e.g. ".png" or "png")
+			if ((item.startsWith('.') && lowerName.endsWith(item)) || lowerName.endsWith(`.${item}`)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private renderFolderTree(folder: TFolder, targetFilePath: string, currentDepth: number, excludeItems: string[]): { text: string; totalFiles: number } {
 		let result = '';
 		let totalFiles = 0;
 
-		const children = folder.children.filter(file => file.path !== targetFilePath);
+		const children = folder.children.filter(file => {
+			if (file.path === targetFilePath) return false;
+			if (this.isExcluded(file.name, excludeItems)) return false;
+			return true;
+		});
 
 		const directFiles: TFile[] = [];
 		const directSubfolders: TFolder[] = [];
@@ -178,14 +212,13 @@ export default class EzIndexPlugin extends Plugin {
 
 		// Render subfolders recursively
 		for (const subfolder of directSubfolders) {
-			// Level 1 subfolder (currentDepth=1) -> H2 (##)
-			// Level 2 subfolder (currentDepth=2) -> H3 (###)
 			const headingLevel = Math.min(6, currentDepth + 1);
 			const hashtags = '#'.repeat(headingLevel);
 
+			const subResult = this.renderFolderTree(subfolder, targetFilePath, currentDepth + 1, excludeItems);
+			
+			// Only output header if there is content or subfolder is not empty
 			result += `${hashtags} ${subfolder.name}\n\n`;
-
-			const subResult = this.renderFolderTree(subfolder, targetFilePath, currentDepth + 1);
 			result += subResult.text;
 			totalFiles += subResult.totalFiles;
 		}
@@ -220,7 +253,7 @@ class EzIndexGeneratorModal extends Modal {
 
 		new Setting(contentEl)
 			.setName('目標目錄 (Target Directory)')
-			.setDesc('請選擇要建立索引的目錄 (將包含所有子目錄與檔案)')
+			.setDesc('請選擇要建立索引的目錄')
 			.addDropdown(dropdown => {
 				for (const folder of allFolders) {
 					const displayPath = folder.path === '/' ? '/ (Vault 根目錄)' : folder.path;
@@ -297,7 +330,7 @@ class EzIndexSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Target Directory to Index (目標目錄)')
-			.setDesc('Select the specific directory in your vault to generate an index for (includes subfolders).')
+			.setDesc('Select the specific directory in your vault to generate an index for.')
 			.addDropdown(dropdown => {
 				for (const folder of allFolders) {
 					const displayPath = folder.path === '/' ? '/ (Vault 根目錄)' : folder.path;
@@ -333,6 +366,17 @@ class EzIndexSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.indexFilename)
 				.onChange(async (value) => {
 					this.plugin.settings.indexFilename = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Exclude List (排除清單)')
+			.setDesc('Comma-separated list of file/folder names or extensions to exclude (e.g. templates, archive, .png).')
+			.addText(text => text
+				.setPlaceholder('templates, archive, .png')
+				.setValue(this.plugin.settings.excludeList)
+				.onChange(async (value) => {
+					this.plugin.settings.excludeList = value;
 					await this.plugin.saveSettings();
 				}));
 

@@ -1,7 +1,7 @@
 {
 	"id": "ezindex",
 	"name": "EzIndex",
-	"version": "0.5.0",
+	"version": "0.6.0",
 	"minAppVersion": "0.15.0",
 	"description": "Easy index and table of contents generator for Obsidian notes and folders.",
 	"author": "Antigravity",
