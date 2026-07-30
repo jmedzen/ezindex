@@ -10,7 +10,7 @@ interface EzIndexSettings {
 }
 
 const DEFAULT_SETTINGS: EzIndexSettings = {
-	indexHeader: '## Directory Index',
+	indexHeader: '# Directory Index',
 	showExtension: false,
 	indexFilename: '_Index.md',
 	indexLocation: 'inFolder',
@@ -110,7 +110,6 @@ export default class EzIndexPlugin extends Plugin {
 			targetDirPath = targetFolder.path === '/' ? '' : targetFolder.path;
 		} else if (this.settings.indexLocation === 'customFolder') {
 			targetDirPath = this.settings.customFolderPath.trim();
-			// Ensure custom folder exists if specified
 			if (targetDirPath && !this.app.vault.getAbstractFileByPath(normalizePath(targetDirPath))) {
 				try {
 					await this.app.vault.createFolder(normalizePath(targetDirPath));
@@ -122,46 +121,76 @@ export default class EzIndexPlugin extends Plugin {
 
 		const targetFilePath = normalizePath(targetDirPath ? `${targetDirPath}/${filename}` : filename);
 
-		// Filter files in target folder (excluding subdirectories or index file itself if inside same folder)
-		const children = targetFolder.children.filter(file => {
-			if (file.path === targetFilePath) return false;
-			return true;
-		});
-
-		// Sort children alphabetically (folders first, then files)
-		children.sort((a, b) => {
-			const aIsDir = a instanceof TFolder;
-			const bIsDir = b instanceof TFolder;
-			if (aIsDir && !bIsDir) return -1;
-			if (!aIsDir && bIsDir) return 1;
-			return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-		});
-
-		// Build index content
+		// Build recursive markdown content
 		let content = `${this.settings.indexHeader}\n\n`;
-		for (const file of children) {
-			const isDir = file instanceof TFolder;
-			const prefix = isDir ? '📁 ' : '📄 ';
-			let displayName = file.name;
-			if (!isDir && !this.settings.showExtension) {
-				displayName = displayName.replace(/\.[^/.]+$/, '');
-			}
-			content += `- ${prefix}[[${file.path}|${displayName}]]\n`;
-		}
+
+		const { text: treeContent, totalFiles } = this.renderFolderTree(targetFolder, targetFilePath, 1);
+		content += treeContent;
 
 		// Create or update the index note file
 		const existingFile = this.app.vault.getAbstractFileByPath(targetFilePath);
 		if (existingFile && existingFile instanceof TFile) {
 			if (this.settings.overwriteExisting) {
 				await this.app.vault.modify(existingFile, content);
-				new Notice(`EzIndex: Updated index note at "${targetFilePath}" (${children.length} items).`);
+				new Notice(`EzIndex: Updated index note at "${targetFilePath}" (${totalFiles} files indexed).`);
 			} else {
 				new Notice(`EzIndex: Index note "${targetFilePath}" already exists (overwrite disabled).`);
 			}
 		} else {
 			await this.app.vault.create(targetFilePath, content);
-			new Notice(`EzIndex: Created new index note at "${targetFilePath}" (${children.length} items).`);
+			new Notice(`EzIndex: Created new index note at "${targetFilePath}" (${totalFiles} files indexed).`);
 		}
+	}
+
+	private renderFolderTree(folder: TFolder, targetFilePath: string, currentDepth: number): { text: string; totalFiles: number } {
+		let result = '';
+		let totalFiles = 0;
+
+		const children = folder.children.filter(file => file.path !== targetFilePath);
+
+		const directFiles: TFile[] = [];
+		const directSubfolders: TFolder[] = [];
+
+		for (const child of children) {
+			if (child instanceof TFolder) {
+				directSubfolders.push(child);
+			} else if (child instanceof TFile) {
+				directFiles.push(child);
+			}
+		}
+
+		// Sort files and subfolders alphabetically
+		directFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+		directSubfolders.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+
+		// Render direct files in current folder
+		if (directFiles.length > 0) {
+			totalFiles += directFiles.length;
+			for (const file of directFiles) {
+				let displayName = file.name;
+				if (!this.settings.showExtension) {
+					displayName = displayName.replace(/\.[^/.]+$/, '');
+				}
+				result += `- [[${file.path}|${displayName}]]\n`;
+			}
+			result += '\n';
+		}
+
+		// Render subfolders recursively
+		for (const subfolder of directSubfolders) {
+			// Level 1 subfolder (currentDepth=1) -> H2 (##)
+			// Level 2 subfolder (currentDepth=2) -> H3 (###)
+			const headingLevel = Math.min(6, currentDepth + 1);
+			const hashtags = '#'.repeat(headingLevel);
+
+			result += `${hashtags} ${subfolder.name}\n\n`;
+
+			const subResult = this.renderFolderTree(subfolder, targetFilePath, currentDepth + 1);
+			result += subResult.text;
+			totalFiles += subResult.totalFiles;
+		}
+
+		return { text: result, totalFiles };
 	}
 }
 
@@ -191,7 +220,7 @@ class EzIndexGeneratorModal extends Modal {
 
 		new Setting(contentEl)
 			.setName('目標目錄 (Target Directory)')
-			.setDesc('請選擇要建立索引的目錄')
+			.setDesc('請選擇要建立索引的目錄 (將包含所有子目錄與檔案)')
 			.addDropdown(dropdown => {
 				for (const folder of allFolders) {
 					const displayPath = folder.path === '/' ? '/ (Vault 根目錄)' : folder.path;
@@ -268,7 +297,7 @@ class EzIndexSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Target Directory to Index (目標目錄)')
-			.setDesc('Select the specific directory in your vault to generate an index for.')
+			.setDesc('Select the specific directory in your vault to generate an index for (includes subfolders).')
 			.addDropdown(dropdown => {
 				for (const folder of allFolders) {
 					const displayPath = folder.path === '/' ? '/ (Vault 根目錄)' : folder.path;
@@ -289,7 +318,7 @@ class EzIndexSettingTab extends PluginSettingTab {
 			.setName('Index Header')
 			.setDesc('The heading placed at the top of generated index notes.')
 			.addText(text => text
-				.setPlaceholder('## Directory Index')
+				.setPlaceholder('# Directory Index')
 				.setValue(this.plugin.settings.indexHeader)
 				.onChange(async (value) => {
 					this.plugin.settings.indexHeader = value;
