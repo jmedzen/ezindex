@@ -244,6 +244,7 @@ class EzIndexGeneratorModal extends Modal {
 
 class EzIndexSettingTab extends PluginSettingTab {
 	plugin: EzIndexPlugin;
+	selectedTargetFolder: TFolder | null = null;
 
 	constructor(app: App, plugin: EzIndexPlugin) {
 		super(app, plugin);
@@ -255,6 +256,34 @@ class EzIndexSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		containerEl.createEl('h2', { text: 'EzIndex Plugin Settings' });
+
+		// Target directory selector right inside Settings Tab
+		const allFolders = this.app.vault.getAllLoadedFiles().filter((f): f is TFolder => f instanceof TFolder);
+		allFolders.sort((a, b) => a.path.localeCompare(b.path));
+
+		if (!this.selectedTargetFolder && allFolders.length > 0) {
+			const activeFile = this.app.workspace.getActiveFile();
+			this.selectedTargetFolder = activeFile?.parent || this.app.vault.getRoot();
+		}
+
+		new Setting(containerEl)
+			.setName('Target Directory to Index (目標目錄)')
+			.setDesc('Select the specific directory in your vault to generate an index for.')
+			.addDropdown(dropdown => {
+				for (const folder of allFolders) {
+					const displayPath = folder.path === '/' ? '/ (Vault 根目錄)' : folder.path;
+					dropdown.addOption(folder.path, displayPath);
+				}
+				if (this.selectedTargetFolder) {
+					dropdown.setValue(this.selectedTargetFolder.path);
+				}
+				dropdown.onChange((value) => {
+					const folder = this.app.vault.getAbstractFileByPath(value);
+					if (folder instanceof TFolder) {
+						this.selectedTargetFolder = folder;
+					}
+				});
+			});
 
 		new Setting(containerEl)
 			.setName('Index Header')
@@ -326,5 +355,22 @@ class EzIndexSettingTab extends PluginSettingTab {
 					this.plugin.settings.overwriteExisting = value;
 					await this.plugin.saveSettings();
 				}));
+
+		// Bottom Execute Button inside Settings Tab
+		new Setting(containerEl)
+			.setName('Generate Index Now (立即建立索引)')
+			.setDesc('Click to generate the index note for the selected target directory using the above settings.')
+			.addButton(button => {
+				button
+					.setButtonText('🚀 執行建立索引 (Generate Index)')
+					.setCta()
+					.onClick(async () => {
+						if (!this.selectedTargetFolder) {
+							new Notice('請先選擇一個目標目錄！');
+							return;
+						}
+						await this.plugin.generateIndexForFolder(this.selectedTargetFolder);
+					});
+			});
 	}
 }
