@@ -372,13 +372,18 @@ class EzIndexSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName('Exclude List (排除清單)')
 			.setDesc('Comma-separated list of file/folder names or extensions to exclude (e.g. templates, archive, .png).')
-			.addText(text => text
-				.setPlaceholder('templates, archive, .png')
-				.setValue(this.plugin.settings.excludeList)
-				.onChange(async (value) => {
-					this.plugin.settings.excludeList = value;
-					await this.plugin.saveSettings();
-				}));
+			.addTextArea(text => {
+				text
+					.setPlaceholder('templates, archive, .png')
+					.setValue(this.plugin.settings.excludeList)
+					.onChange(async (value) => {
+						this.plugin.settings.excludeList = value;
+						await this.plugin.saveSettings();
+					});
+				text.inputEl.rows = 3;
+				text.inputEl.style.width = '100%';
+				text.inputEl.style.resize = 'vertical';
+			});
 
 		new Setting(containerEl)
 			.setName('Index Output Location')
@@ -431,7 +436,7 @@ class EzIndexSettingTab extends PluginSettingTab {
 
 		// Bottom Execute Button inside Settings Tab
 		new Setting(containerEl)
-			.setName('Generate Index Now (立即建立索引)')
+			.setName('Generate Index Now (開啟建立索引)')
 			.setDesc('Click to generate the index note for the selected target directory using the above settings.')
 			.addButton(button => {
 				button
