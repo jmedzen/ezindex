@@ -132,7 +132,7 @@ export default class EzIndexPlugin extends Plugin {
 		// Build recursive markdown content
 		let content = `${this.settings.indexHeader}\n\n`;
 
-		const { text: treeContent, totalFiles } = this.renderFolderTree(targetFolder, targetFilePath, 1, excludeItems);
+		const { text: treeContent, totalFiles } = this.renderFolderTree(targetFolder, targetFolder, targetFilePath, 1, excludeItems);
 		content += treeContent;
 
 		// Create or update the index note file
@@ -172,7 +172,13 @@ export default class EzIndexPlugin extends Plugin {
 		return false;
 	}
 
-	private renderFolderTree(folder: TFolder, targetFilePath: string, currentDepth: number, excludeItems: string[]): { text: string; totalFiles: number } {
+	private renderFolderTree(
+		folder: TFolder,
+		baseTargetFolder: TFolder,
+		targetFilePath: string,
+		currentDepth: number,
+		excludeItems: string[]
+	): { text: string; totalFiles: number } {
 		let result = '';
 		let totalFiles = 0;
 
@@ -201,11 +207,21 @@ export default class EzIndexPlugin extends Plugin {
 		if (directFiles.length > 0) {
 			totalFiles += directFiles.length;
 			for (const file of directFiles) {
-				let displayName = file.name;
-				if (!this.settings.showExtension) {
-					displayName = displayName.replace(/\.[^/.]+$/, '');
+				// Strip targetFolder prefix to use relative path relative to target folder
+				let relPath = file.path;
+				if (baseTargetFolder.path !== '/' && file.path.startsWith(baseTargetFolder.path + '/')) {
+					relPath = file.path.substring(baseTargetFolder.path.length + 1);
 				}
-				result += `- [[${file.path}|${displayName}]]\n`;
+
+				let linkTarget = relPath;
+				let displayName = file.name;
+
+				if (!this.settings.showExtension) {
+					linkTarget = relPath.replace(/\.[^/.]+$/, '');
+					displayName = file.name.replace(/\.[^/.]+$/, '');
+				}
+
+				result += `- [[${linkTarget}|${displayName}]]\n`;
 			}
 			result += '\n';
 		}
@@ -215,9 +231,8 @@ export default class EzIndexPlugin extends Plugin {
 			const headingLevel = Math.min(6, currentDepth + 1);
 			const hashtags = '#'.repeat(headingLevel);
 
-			const subResult = this.renderFolderTree(subfolder, targetFilePath, currentDepth + 1, excludeItems);
+			const subResult = this.renderFolderTree(subfolder, baseTargetFolder, targetFilePath, currentDepth + 1, excludeItems);
 			
-			// Only output header if there is content or subfolder is not empty
 			result += `${hashtags} ${subfolder.name}\n\n`;
 			result += subResult.text;
 			totalFiles += subResult.totalFiles;
