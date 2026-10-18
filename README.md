@@ -3,7 +3,11 @@
 [![GitHub Release](https://img.shields.io/github/v/release/jmedzen/ezindex)](https://github.com/jmedzen/ezindex/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**EzIndex** is a feature-rich Obsidian plugin that automatically generates structured, hierarchical Table of Contents (TOC) and Index notes for any folder in your vault.
+**EzIndex** generates a structured, hierarchical table of contents for any folder in your vault, including everything nested inside it.
+
+Point it at a folder and it walks every subfolder, producing one index note with Markdown headings per subfolder level and links to every file. Choose where the note is saved, name it with a `{{folderName}}` pattern, and exclude templates or attachments you don't want listed.
+
+Everything runs locally. The plugin makes no network requests and sends no telemetry.
 
 ---
 

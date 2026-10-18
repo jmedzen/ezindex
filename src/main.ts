@@ -45,8 +45,6 @@ export default class EzIndexPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		console.log('Loading EzIndex plugin');
-
 		const t = this.t();
 
 		// Ribbon icon: Open Generator Modal with execute button
@@ -103,7 +101,7 @@ export default class EzIndexPlugin extends Plugin {
 	}
 
 	onunload() {
-		console.log('Unloading EzIndex plugin');
+		// Nothing to tear down: registered events are cleaned up by Obsidian.
 	}
 
 	async loadSettings() {
