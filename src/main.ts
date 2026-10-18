@@ -589,8 +589,25 @@ class EzIndexSettingTab extends PluginSettingTab {
 			(this.plugin.settings as unknown as Record<string, unknown>)[key] = value;
 			await this.plugin.saveSettings();
 		}
-		// Keep the imperative page (used below 1.13.0) in step with edits
-		// made through the declarative one.
+		// Keep the rendered page in step with the new value.
+		this.redraw();
+	}
+
+	/**
+	 * Re-renders the tab after the settings change.
+	 *
+	 * On 1.13.0 and later the host owns rendering: update() re-runs
+	 * getSettingDefinitions() and re-evaluates every visible() predicate, so
+	 * rows that appear conditionally (custom folder path) switch correctly.
+	 * Below 1.13.0 there is no update() and display() is the only path, so
+	 * fall back to it there.
+	 */
+	private redraw(): void {
+		const self = this as unknown as { update?: () => void };
+		if (typeof self.update === 'function') {
+			self.update();
+			return;
+		}
 		this.display();
 	}
 
@@ -640,7 +657,7 @@ class EzIndexSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.indexLocation = value as EzIndexSettings['indexLocation'];
 						await this.plugin.saveSettings();
-						this.display();
+						this.redraw();
 					});
 			});
 
@@ -767,7 +784,7 @@ class EzIndexSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.uiLanguage = value as UiLanguage;
 						await this.plugin.saveSettings();
-						this.display();
+						this.redraw();
 					});
 			});
 
@@ -822,7 +839,10 @@ class EzIndexSettingTab extends PluginSettingTab {
 
 	private renderPreview(): void {
 		const el = this.previewEl;
-		if (!el) return;
+		// After a declarative update() the host rebuilds the rows, so previewEl
+		// can point at a detached node. Redrawing that would write into a
+		// discarded element; the render callback draws the live one instead.
+		if (!el || el.isConnected === false) return;
 		this.renderPreviewInto(el);
 	}
 
