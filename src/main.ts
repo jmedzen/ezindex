@@ -1,4 +1,5 @@
 import { App, Plugin, PluginSettingTab, Setting, Notice, TFolder, TFile, Modal, Menu, TAbstractFile, normalizePath } from 'obsidian';
+import type { SettingDefinitionItem } from 'obsidian';
 import {
 	DEFAULT_UI_LANGUAGE,
 	getStrings,
@@ -412,6 +413,187 @@ class EzIndexSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
+	/**
+	 * Declarative description of the settings, used by Obsidian 1.13.0 and
+	 * later so the options show up in the settings search. Older versions
+	 * never call this and keep using display() below, which is why the two
+	 * must stay in sync.
+	 */
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		const t = this.plugin.t();
+		const folders = this.sortedFolders();
+		const folderOptions: Record<string, string> = {};
+		for (const folder of folders) {
+			folderOptions[folder.path] = folder.path === '/' ? t.target.vaultRootOption : folder.path;
+		}
+
+		const definitions: SettingDefinitionItem[] = [
+			{
+				type: 'group',
+				heading: t.sections.target,
+				items: [
+					{
+						name: t.target.name,
+						desc: describe(t.target.desc(folders.length)),
+						control: {
+							type: 'dropdown',
+							key: 'targetFolderPath',
+							options: folderOptions,
+						},
+					},
+					{
+						name: t.location.name,
+						desc: t.location.desc,
+						control: {
+							type: 'dropdown',
+							key: 'indexLocation',
+							options: {
+								inFolder: t.location.inFolder,
+								vaultRoot: t.location.vaultRoot,
+								customFolder: t.location.customFolder,
+							},
+						},
+					},
+					{
+						name: t.customPath.name,
+						desc: describe(t.customPath.desc),
+						control: {
+							type: 'text',
+							key: 'customFolderPath',
+							placeholder: t.customPath.placeholder,
+						},
+						visible: () => this.plugin.settings.indexLocation === 'customFolder',
+					},
+					{
+						name: t.filename.name,
+						desc: describe(t.filename.desc),
+						control: {
+							type: 'text',
+							key: 'indexFilename',
+							placeholder: t.filename.placeholder,
+						},
+					},
+				],
+			},
+			{
+				type: 'group',
+				heading: t.sections.preview,
+				items: [
+					{
+						name: t.previewSetting.name,
+						desc: t.previewSetting.desc,
+						render: (setting) => {
+							const el = setting.controlEl.createDiv({
+								cls: 'ezindex-preview ezindex-preview--wide',
+							});
+							this.renderPreviewInto(el);
+							return () => el.remove();
+						},
+					},
+				],
+			},
+			{
+				type: 'group',
+				heading: t.sections.content,
+				items: [
+					{
+						name: t.header.name,
+						desc: describe(t.header.desc),
+						control: {
+							type: 'text',
+							key: 'indexHeader',
+							placeholder: t.header.placeholder,
+						},
+					},
+					{
+						name: t.extension.name,
+						desc: describe(t.extension.desc),
+						control: { type: 'toggle', key: 'showExtension' },
+					},
+				],
+			},
+			{
+				type: 'group',
+				heading: t.sections.filter,
+				items: [
+					{
+						name: t.exclude.name,
+						desc: describe(t.exclude.desc),
+						control: {
+							type: 'textarea',
+							key: 'excludeList',
+							placeholder: t.exclude.placeholder,
+							rows: 4,
+						},
+					},
+					{
+						name: t.overwrite.name,
+						desc: t.overwrite.desc,
+						control: { type: 'toggle', key: 'overwriteExisting' },
+					},
+				],
+			},
+			{
+				type: 'group',
+				heading: t.sections.run,
+				items: [
+					{
+						name: t.run.name,
+						desc: t.run.desc,
+						action: () => {
+							void this.runFromSettings();
+						},
+					},
+				],
+			},
+			{
+				type: 'group',
+				heading: t.sections.language,
+				items: [
+					{
+						name: t.language.name,
+						desc: t.language.desc,
+						control: {
+							type: 'dropdown',
+							key: 'uiLanguage',
+							options: {
+								auto: this.autoLanguageLabel(t),
+								en: 'English',
+								'zh-tw': '繁體中文 (Traditional Chinese)',
+							},
+						},
+					},
+				],
+			},
+		];
+
+		return definitions;
+	}
+
+	/** Reads the value a declarative control should show. */
+	getControlValue(key: string): unknown {
+		if (key === 'targetFolderPath') {
+			return this.resolveSelectedFolder(this.sortedFolders())?.path ?? '/';
+		}
+		return (this.plugin.settings as unknown as Record<string, unknown>)[key];
+	}
+
+	/** Persists a value edited through a declarative control. */
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		if (key === 'targetFolderPath') {
+			const folder = this.app.vault.getAbstractFileByPath(String(value));
+			if (folder instanceof TFolder) {
+				this.selectedTargetFolder = folder;
+			}
+		} else {
+			(this.plugin.settings as unknown as Record<string, unknown>)[key] = value;
+			await this.plugin.saveSettings();
+		}
+		// Keep the imperative page (used below 1.13.0) in step with edits
+		// made through the declarative one.
+		this.display();
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
@@ -419,15 +601,8 @@ class EzIndexSettingTab extends PluginSettingTab {
 
 		const t = this.plugin.t();
 
-		const allFolders = this.app.vault.getAllLoadedFiles()
-			.filter((f): f is TFolder => f instanceof TFolder)
-			.sort((a, b) => a.path.localeCompare(b.path));
-
-		if (!this.selectedTargetFolder || !allFolders.includes(this.selectedTargetFolder)) {
-			const activeFolder = this.app.workspace.getActiveFile()?.parent;
-			this.selectedTargetFolder = (activeFolder instanceof TFolder ? activeFolder : null)
-				?? this.app.vault.getRoot();
-		}
+		const allFolders = this.sortedFolders();
+		this.resolveSelectedFolder(allFolders);
 
 		// ── 1. Target & Output ─────────────────────────────────────
 		this.addSectionHeading(containerEl, t.sections.target);
@@ -599,6 +774,37 @@ class EzIndexSettingTab extends PluginSettingTab {
 		this.renderPreview();
 	}
 
+	/** Every folder in the vault, sorted by path, shared by both renderers. */
+	private sortedFolders(): TFolder[] {
+		return this.app.vault.getAllLoadedFiles()
+			.filter((f): f is TFolder => f instanceof TFolder)
+			.sort((a, b) => a.path.localeCompare(b.path));
+	}
+
+	/**
+	 * Returns the folder currently targeted, defaulting to the active file's
+	 * folder and then to the vault root. Keeps selectedTargetFolder valid when
+	 * folders have been renamed or deleted since the tab was opened.
+	 */
+	private resolveSelectedFolder(folders: TFolder[]): TFolder | null {
+		if (!this.selectedTargetFolder || !folders.includes(this.selectedTargetFolder)) {
+			const activeFolder = this.app.workspace.getActiveFile()?.parent;
+			this.selectedTargetFolder = (activeFolder instanceof TFolder ? activeFolder : null)
+				?? this.app.vault.getRoot();
+		}
+		return this.selectedTargetFolder;
+	}
+
+	/** Runs the generator from the settings page, reporting a missing target. */
+	private async runFromSettings(): Promise<void> {
+		const folder = this.resolveSelectedFolder(this.sortedFolders());
+		if (!folder) {
+			new Notice(this.plugin.t().notices.pickTargetFolder);
+			return;
+		}
+		await this.plugin.generateIndexForFolder(folder);
+	}
+
 	/** 「自動」選項會標示目前實際偵測到的語言，方便確認效果。 */
 	private autoLanguageLabel(t: UiStrings): string {
 		if (this.plugin.settings.uiLanguage !== 'auto') {
@@ -617,6 +823,11 @@ class EzIndexSettingTab extends PluginSettingTab {
 	private renderPreview(): void {
 		const el = this.previewEl;
 		if (!el) return;
+		this.renderPreviewInto(el);
+	}
+
+	/** Renders the output preview into the given element (imperative page). */
+	private renderPreviewInto(el: HTMLElement): void {
 		el.empty();
 
 		const t = this.plugin.t();
