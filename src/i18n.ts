@@ -126,6 +126,7 @@ export interface UiStrings {
 		created: (path: string, count: number) => string;
 		updated: (path: string, count: number) => string;
 		exists: (path: string) => string;
+		createFolderFailed: (path: string) => string;
 	};
 	/** resolveIndexTarget 產生的位置描述 */
 	locationLabel: {
@@ -264,6 +265,7 @@ const EN: UiStrings = {
 		created: (path, count) => `EzIndex: Created index note at "${path}" (${count} files indexed).`,
 		updated: (path, count) => `EzIndex: Updated index note at "${path}" (${count} files indexed).`,
 		exists: (path) => `EzIndex: Index note "${path}" already exists (overwrite disabled).`,
+		createFolderFailed: (path) => `EzIndex: Could not create the folder "${path}".`,
 	},
 	locationLabel: {
 		vaultRoot: 'Vault root',
@@ -401,6 +403,7 @@ const ZH_TW: UiStrings = {
 		created: (path, count) => `EzIndex: 已建立索引筆記「${path}」（收錄 ${count} 個檔案）。`,
 		updated: (path, count) => `EzIndex: 已更新索引筆記「${path}」（收錄 ${count} 個檔案）。`,
 		exists: (path) => `EzIndex: 索引筆記「${path}」已存在（覆寫已關閉）。`,
+		createFolderFailed: (path) => `EzIndex: 無法建立資料夾「${path}」。`,
 	},
 	locationLabel: {
 		vaultRoot: 'Vault 根目錄',

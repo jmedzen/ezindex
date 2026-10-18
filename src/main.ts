@@ -54,7 +54,7 @@ export default class EzIndexPlugin extends Plugin {
 
 		// Command 1: Open Generator Modal to select folder & generate
 		this.addCommand({
-			id: 'open-ezindex-generator-modal',
+			id: 'open-generator-modal',
 			name: 'Open Index Generator Modal...',
 			callback: () => {
 				new EzIndexGeneratorModal(this.app, this).open();
@@ -65,7 +65,7 @@ export default class EzIndexPlugin extends Plugin {
 		this.addCommand({
 			id: 'generate-active-folder-index',
 			name: 'Quick Generate Index for Current Folder',
-			callback: () => {
+			callback: async () => {
 				const activeFile = this.app.workspace.getActiveFile();
 				if (!activeFile) {
 					new Notice(t.notices.noActiveFile);
@@ -76,7 +76,7 @@ export default class EzIndexPlugin extends Plugin {
 					new Notice(t.notices.noActiveFolder);
 					return;
 				}
-				this.generateIndexForFolder(folder);
+				await this.generateIndexForFolder(folder);
 			}
 		});
 
@@ -185,8 +185,9 @@ export default class EzIndexPlugin extends Plugin {
 			if (!this.app.vault.getAbstractFileByPath(resolved.dirPath)) {
 				try {
 					await this.app.vault.createFolder(resolved.dirPath);
-				} catch (err) {
-					console.error('EzIndex: Error creating custom directory', err);
+				} catch {
+					new Notice(this.t().notices.createFolderFailed(resolved.dirPath));
+					throw new Error(`EzIndex: could not create folder "${resolved.dirPath}"`);
 				}
 			}
 		}
@@ -540,8 +541,7 @@ class EzIndexSettingTab extends PluginSettingTab {
 						this.renderPreview();
 					});
 				text.inputEl.rows = 4;
-				text.inputEl.style.width = '100%';
-				text.inputEl.style.resize = 'vertical';
+				text.inputEl.addClass('ezindex-exclude-input');
 			});
 
 		new Setting(containerEl)

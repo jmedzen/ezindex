@@ -114,3 +114,9 @@
 .is-tablet .ezindex-setting-preview .setting-item-control {
 	margin-top: 4px;
 }
+
+/* Exclude-list textarea: full width, vertically resizable only. */
+.ezindex-exclude-input {
+	width: 100%;
+	resize: vertical;
+}
