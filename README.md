@@ -16,8 +16,9 @@
   - 3rd-level subfolders: `#### Subfolder` (H4 Heading), and so on.
 - 🚫 **Custom Exclude List**: Easily exclude specific file names, subfolder names, or file extensions (e.g. `templates, archive, .png, _Index`) using a multi-line text box. Entries may be separated by commas, newlines, semicolons or the Chinese enumeration comma `、`.
 - 🔍 **Live Output Preview**: The settings page shows the exact filename and full path that will be written, plus whether the note will be created, overwritten or skipped.
+- 🌐 **English / 繁體中文 Descriptions**: All labels, descriptions, the modal and notices are available in both languages. They follow the Obsidian interface language by default and can be forced to either one in settings.
 - 🎯 **Multiple Convenient Ways to Trigger**:
-  1. **Plugin Settings Page**: Pick a target directory and click `🚀 建立索引 (Generate Index)` right inside settings!
+  1. **Plugin Settings Page**: Pick a target directory and click `🚀 Generate index` right inside settings!
   2. **Interactive Modal**: Open via Ribbon Icon or Command Palette (`EzIndex: Open Index Generator Modal...`).
   3. **File Explorer Context Menu**: Right-click any folder in the left sidebar -> `EzIndex: Generate Index for this folder`.
 - 🛠️ **Flexible Filename & Output Location**:
@@ -30,10 +31,10 @@
 
 ### 1. Generate Index via Settings Page
 1. Go to **Obsidian Settings** -> **EzIndex**.
-2. Select your **Target Directory to Index** (目標目錄).
-3. (Optional) Adjust **Index Location**, **Index Filename Pattern**, **Index Header** and **Exclude List**.
-4. Check the **Output Preview** section — it shows the resulting path and what will happen.
-5. Click **`🚀 建立索引 (Generate Index)`** in the **Run** section at the bottom.
+2. Select your **Target directory**.
+3. (Optional) Adjust **Index location**, **Index filename**, **Index header** and **Exclude list**.
+4. Check the **Output preview** section — it shows the resulting path and what will happen.
+5. Click **`🚀 Generate index`** in the **Run** section at the bottom.
 
 ### 2. Generate Index via File Explorer
 1. Right-click any folder in the left sidebar File Explorer.
@@ -41,7 +42,7 @@
 
 ### 3. Generate Index via Modal
 1. Click the **Ribbon Icon** on the left sidebar (or press `Cmd + P` and search `EzIndex`).
-2. Pick the target folder and click **`🚀 執行建立索引 (Generate Index)`**.
+2. Pick the target folder and click **`🚀 Generate index`**.
 
 ---
 
@@ -49,14 +50,15 @@
 
 | Option | Description | Default |
 |---|---|---|
-| **Target Directory to Index** | Select the directory to index directly from settings | Active folder / Vault Root |
-| **Index Header** | Title heading at the top of the generated note | `# Directory Index` |
-| **Index Filename Pattern** | Filename pattern (supports `{{folderName}}`; `.md` is appended automatically) | `_Index.md` |
-| **Exclude List** | Names or extensions to ignore, separated by commas, newlines, `;` or `、` | *(empty)* |
-| **Index Output Location** | Where to save (`Inside Target Folder`, `Vault Root`, or `Custom Folder`) | `Inside Target Folder` |
-| **Custom Folder Path** | Vault-relative folder, created automatically if missing (only when output location is *Custom Folder*) | *(empty)* |
-| **Show File Extensions** | Display or hide `.md` extension in generated links | `Off` |
-| **Overwrite Existing** | Overwrite existing index note with same name; off = skip and keep manual edits | `On` |
+| **Target directory** | Select the directory to index directly from settings | Active folder / Vault Root |
+| **Index header** | Title heading at the top of the generated note | `# Directory Index` |
+| **Index filename** | Filename pattern (supports `{{folderName}}`; `.md` is appended automatically) | `_Index.md` |
+| **Exclude list** | Names or extensions to ignore, separated by commas, newlines, `;` or `、` | *(empty)* |
+| **Index location** | Where to save (`Inside Target Folder`, `Vault Root`, or `Custom Folder`) | `Inside Target Folder` |
+| **Custom folder path** | Vault-relative folder, created automatically if missing (only when output location is *Custom Folder*) | *(empty)* |
+| **Show file extensions** | Display or hide `.md` extension in generated links | `Off` |
+| **Overwrite existing index** | Overwrite existing index note with same name; off = skip and keep manual edits | `On` |
+| **Description language** | `Follow Obsidian interface`, `English`, or `繁體中文` — affects UI text only, never your notes | `Follow Obsidian interface` |
 
 ---
 
