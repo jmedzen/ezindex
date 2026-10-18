@@ -105,7 +105,10 @@ export default class EzIndexPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		// loadData() is typed as any; narrow it once here so the rest of the
+		// plugin works with a real EzIndexSettings rather than any.
+		const stored = (await this.loadData()) as Partial<EzIndexSettings> | null;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, stored ?? {});
 	}
 
 	async saveSettings() {

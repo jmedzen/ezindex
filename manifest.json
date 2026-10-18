@@ -1,7 +1,7 @@
 {
 	"id": "ezindex",
 	"name": "EzIndex",
-	"version": "0.9.3",
+	"version": "0.9.4",
 	"minAppVersion": "1.4.0",
 	"description": "Generate a table of contents for any folder and its subfolders.",
 	"author": "Antigravity",
