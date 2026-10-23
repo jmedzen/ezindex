@@ -1,6 +1,6 @@
 {
 	"name": "ezindex",
-	"version": "0.9.6",
+	"version": "0.9.7",
 	"description": "Easy index generator for Obsidian",
 	"main": "main.js",
 	"scripts": {
